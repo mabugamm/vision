@@ -3,10 +3,11 @@ import cv2.cv as cv
 import os
 import numpy as np
 import fnmatch
+from scipy import linalg as LA
 from matplotlib import pyplot as plt
 
 
-def create_database(directory, show = True):
+def create_database(directory, reso, show = True):
     '''
     Process all images in the given directory.
     Every image is cropped to the detected face, resized to 100x100 and save in another directory (orignal directory name + "2").
@@ -41,7 +42,7 @@ def create_database(directory, show = True):
 
 
         result = img[rects[1]:rects[3],rects[0]:rects[2]]
-        result = cv2.resize(result, (100,100))
+        result = cv2.resize(result, (reso,reso))
         
         #show result
         if show:
@@ -53,7 +54,7 @@ def create_database(directory, show = True):
 
 
 
-def createX(directory,nbDim=10000):
+def createX(directory,nbDim=900):
     '''
     Create an array that contains all the images in directory.
     @return np.array, shape=(nb images in directory, nb pixels in image)
@@ -76,13 +77,19 @@ def project(W, X, mu):
     Project X on the space spanned by the vectors in W.
     mu is the average image.
     '''
-    return #TODO
+    W = W.transpose()
+    M = np.dot(X-mu,W)
+    return M
 
 def reconstruct(W, Y, mu):
     '''
     Reconstruct an image based on its PCA-coefficients Y, the eigenvectors W and the average mu.
     '''
-    return #TODO
+    img = np.zeros(900)
+    for i in range(0,Y.shape[0]-1):
+        img = img + Y[i]*W[i,:]
+    img = img + mu
+    return img
 
 def pca(X, nb_components=0):
     '''
@@ -96,16 +103,9 @@ def pca(X, nb_components=0):
     if (nb_components <= 0) or (nb_components>n):
         nb_components = n
     C = np.cov(X, rowvar=False)
-    mu = np.average(X, axis=1)
-    w, v = np.linalg.eigh(C)
-    idx = np.argsort(w)[::-1]
-    v = v[:,idx]
-    w = w[:,idx]
+    mu = np.average(X, axis=0)
+    w, v = LA.eig(C)
     return [w[1:nb_components], np.transpose(v[:,1:nb_components]), mu]
-
-    #TODO
-    
-    return 
 
 def normalize(img):
     '''
@@ -115,8 +115,9 @@ def normalize(img):
 
 if __name__ == '__main__':
     #create database of normalized images
+    reso = 30
     for directory in ["data/arnold", "data/barack"]:
-        create_database(directory, show = False)
+        create_database(directory, reso, show = False)
     
     show = True
     
@@ -135,16 +136,16 @@ if __name__ == '__main__':
     [eigenvaluesa, eigenvectorsa, mua] = pca(Xa,nb_components=6)
     [eigenvaluesb, eigenvectorsb, mub] = pca(Xb,nb_components=6)
     #visualize first three components
-    cv2.imshow('img',np.hstack( (mua.reshape(100,100),
-                                 normalize(eigenvectorsa[:,0].reshape(100,100)),
-                                 normalize(eigenvectorsa[:,1].reshape(100,100)),
-                                 normalize(eigenvectorsa[:,2].reshape(100,100)))
+    cv2.imshow('img',np.hstack( (mua.reshape(reso,reso),
+                                 normalize(eigenvectorsa[0,:].reshape(reso,reso)),
+                                 normalize(eigenvectorsa[1,:].reshape(reso,reso)),
+                                 normalize(eigenvectorsa[2,:].reshape(reso,reso)))
                                ).astype(np.uint8))
     cv2.waitKey(0) 
-    cv2.imshow('img',np.hstack( (mub.reshape(100,100),
-                                 normalize(eigenvectorsb[:,0].reshape(100,100)),
-                                 normalize(eigenvectorsb[:,1].reshape(100,100)),
-                                 normalize(eigenvectorsb[:,2].reshape(100,100)))
+    cv2.imshow('img',np.hstack( (mub.reshape(reso,reso),
+                                 normalize(eigenvectorsb[0,:].reshape(reso,reso)),
+                                 normalize(eigenvectorsb[1,:].reshape(reso,reso)),
+                                 normalize(eigenvectorsb[2,:].reshape(reso,reso)))
                                ).astype(np.uint8))
     cv2.waitKey(0) 
             
@@ -154,15 +155,15 @@ if __name__ == '__main__':
         
         #project image i on the subspace of arnold and barack
         Ya = project(eigenvectorsa, X, mua )
-        Xa= reconstruct(eigenvectorsa, Ya, mua)
+        Xa= np.real(reconstruct(eigenvectorsa, Ya, mua))
         
         Yb = project(eigenvectorsb, X, mub )
-        Xb= reconstruct(eigenvectorsb, Yb, mub)
+        Xb= np.real(reconstruct(eigenvectorsb, Yb, mub))
         if show:
             #show reconstructed images
-            cv2.imshow('img',np.hstack( (X.reshape(100,100),
-                                         np.clip(Xa.reshape(100,100), 0, 255),
-                                         np.clip(Xb.reshape(100,100), 0, 255)) ).astype(np.uint8) )
+            cv2.imshow('img',np.hstack( (X.reshape(reso,reso),
+                                        np.clip(Xa.reshape(reso,reso), 0, 255),
+                                        np.clip(Xb.reshape(reso,reso), 0, 255)) ).astype(np.uint8) )
             cv2.waitKey(0)   
 
         #classify i
